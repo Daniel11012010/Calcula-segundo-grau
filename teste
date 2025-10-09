@@ -1,0 +1,102 @@
+/// scr_checkpoint_system_local
+/// Sistema completo de checkpoints (salvo na pasta do jogo)
+/// Sem duplicações — simples e direto
+
+globalvar CHECKPOINT_FILE;
+CHECKPOINT_FILE = program_directory + "checkpoint.txt";
+
+
+//----------------------------------------------------//
+// Salva um checkpoint se for novo
+//----------------------------------------------------//
+function checkpoint_save(_id, _x, _y) {
+    var current = checkpoint_get();
+
+    // Evita salvar o mesmo checkpoint repetidamente
+    if (current == _id) exit;
+
+    var buffer = buffer_create(64, buffer_grow, 1);
+    var data = "current=" + string(_id) + "\nx=" + string(_x) + "\ny=" + string(_y);
+    buffer_write(buffer, buffer_text, data);
+    buffer_save(buffer, CHECKPOINT_FILE);
+    buffer_delete(buffer);
+
+    global.checkpoint = _id;
+    show_debug_message("Checkpoint " + string(_id) + " salvo!");
+}
+
+
+//----------------------------------------------------//
+// Retorna o número do checkpoint atual
+//----------------------------------------------------//
+function checkpoint_get() {
+    if (variable_global_exists("checkpoint"))
+        return global.checkpoint;
+
+    if (file_exists(CHECKPOINT_FILE)) {
+        var file = file_text_open_read(CHECKPOINT_FILE);
+        var id = 0;
+        while (!file_text_eof(file)) {
+            var line = file_text_read_string(file);
+            if (string_copy(line, 1, 8) == "current=") {
+                id = real(string_delete(line, 1, 8));
+                break;
+            }
+            file_text_readln(file);
+        }
+        file_text_close(file);
+        global.checkpoint = id;
+        return id;
+    }
+
+    return 0;
+}
+
+
+//----------------------------------------------------//
+// Carrega posição do checkpoint atual
+//----------------------------------------------------//
+function checkpoint_load() {
+    if (!file_exists(CHECKPOINT_FILE)) return undefined;
+
+    var file = file_text_open_read(CHECKPOINT_FILE);
+    var id = 0, x_ = 0, y_ = 0;
+    while (!file_text_eof(file)) {
+        var line = file_text_read_string(file);
+        if (string_copy(line, 1, 8) == "current=") id = real(string_delete(line, 1, 8));
+        if (string_copy(line, 1, 2) == "x=") x_ = real(string_delete(line, 1, 2));
+        if (string_copy(line, 1, 2) == "y=") y_ = real(string_delete(line, 1, 2));
+        file_text_readln(file);
+    }
+    file_text_close(file);
+
+    global.checkpoint = id;
+    return [x_, y_];
+}
+
+
+//----------------------------------------------------//
+// Apaga o arquivo de checkpoint
+//----------------------------------------------------//
+function checkpoint_reset() {
+    if (file_exists(CHECKPOINT_FILE)) file_delete(CHECKPOINT_FILE);
+    global.checkpoint = 0;
+}
+
+
+//----------------------------------------------------//
+// Cria o player no checkpoint salvo automaticamente
+//----------------------------------------------------//
+function checkpoint_spawn_player(_object) {
+    var pos = checkpoint_load();
+
+    if (is_array(pos)) {
+        var inst = instance_create_layer(pos[0], pos[1], "Instances", _object);
+        show_debug_message("Player criado no checkpoint " + string(checkpoint_get()));
+        return inst;
+    } else {
+        var inst = instance_create_layer(0, 0, "Instances", _object);
+        show_debug_message("Nenhum checkpoint salvo — player criado na posição padrão.");
+        return inst;
+    }
+}
